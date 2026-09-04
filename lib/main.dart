@@ -38,6 +38,7 @@ class _PermissionGateState extends State<PermissionGate>
   bool _runtimePermissionsGranted = false;
   bool _accessibilityEnabled = false;
   bool _notificationPolicyGranted = false;
+  bool _notificationListenerEnabled = false;
   bool _isLoading = true;
 
   @override
@@ -126,6 +127,8 @@ class _PermissionGateState extends State<PermissionGate>
         _accessibilityEnabled = result['accessibilityEnabled'] == true;
         _notificationPolicyGranted =
             result['notificationPolicyGranted'] == true;
+        _notificationListenerEnabled =
+            result['notificationListenerEnabled'] == true;
       });
     } on MissingPluginException {
       // Web and other non-Android platforms
@@ -150,7 +153,8 @@ class _PermissionGateState extends State<PermissionGate>
             title: const Text('Permissions are required'),
             content: const Text(
               'Decry will not work unless every permission it requests is allowed. '
-              'This includes SMS and phone access, Accessibility access, and Do Not Disturb access.',
+              'This includes phone access, Accessibility access, Notification access, '
+              'and Do Not Disturb access.',
             ),
             actions: [
               FilledButton(
@@ -170,6 +174,15 @@ class _PermissionGateState extends State<PermissionGate>
 
   Future<void> _openNotificationSettings() async {
     await _permissionsChannel.invokeMethod<void>('openNotificationPolicySettings');
+  }
+
+  Future<void> _openNotificationListenerSettings() async {
+    await _permissionsChannel.invokeMethod<void>('openNotificationListenerSettings');
+  }
+
+  Future<void> _toggleSilentMode(bool enabled) async {
+    await _permissionsChannel.invokeMethod('toggleSilentMode', {'enabled': enabled});
+    setState(() {});
   }
 
   @override
@@ -203,94 +216,178 @@ class _PermissionGateState extends State<PermissionGate>
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Center(
-          child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(height: 48),
-            const Text(
-              'Decry',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w500),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(height: 48),
+                const Text(
+                  'Decry',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 24),
+                if (!_accessibilityEnabled)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'Accessibility access is required',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: 200,
+                          child: ElevatedButton(
+                            onPressed: _openAccessibilitySettings,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.black,
+                              foreground: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: const Text('Enable', style: TextStyle(fontSize: 14)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (!_notificationListenerEnabled)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'Notification access is required\n(for reading SMS notifications)',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: 200,
+                          child: ElevatedButton(
+                            onPressed: _openNotificationListenerSettings,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.black,
+                              foreground: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: const Text('Enable', style: TextStyle(fontSize: 14)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (!_notificationPolicyGranted)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'Do Not Disturb access is required',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: 200,
+                          child: ElevatedButton(
+                            onPressed: _openNotificationSettings,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.black,
+                              foreground: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: const Text('Enable', style: TextStyle(fontSize: 14)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (!_runtimePermissionsGranted)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'Phone access is required',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: 200,
+                          child: ElevatedButton(
+                            onPressed: _requestRuntimePermissions,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.black,
+                              foreground: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: const Text('Grant access', style: TextStyle(fontSize: 14)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (_accessibilityEnabled &&
+                    _notificationListenerEnabled &&
+                    _notificationPolicyGranted &&
+                    _runtimePermissionsGranted)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'All permissions granted ✅',
+                          style: TextStyle(fontSize: 14, color: Colors.green),
+                        ),
+                        const SizedBox(height: 24),
+                        const Text(
+                          'Silent Mode Control',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 120,
+                              child: ElevatedButton(
+                                onPressed: () => _toggleSilentMode(true),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.black,
+                                  foreground: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                                child: const Text('Silent', style: TextStyle(fontSize: 14)),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            SizedBox(
+                              width: 120,
+                              child: ElevatedButton(
+                                onPressed: () => _toggleSilentMode(false),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.black,
+                                  foreground: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                                child: const Text('Normal', style: TextStyle(fontSize: 14)),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'All permissions granted ✅',
+                          style: TextStyle(fontSize: 14, color: Colors.green),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
-            const SizedBox(height: 24),
-            if (!_accessibilityEnabled)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Accessibility access is required',
-                      style: TextStyle(fontSize: 14),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: 200,
-                      child: ElevatedButton(
-                        onPressed: _openAccessibilitySettings,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.black,
-                          foreground: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: const Text('Enable', style: TextStyle(fontSize: 14)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            if (!_notificationPolicyGranted)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Do Not Disturb access is required',
-                      style: TextStyle(fontSize: 14),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: 200,
-                      child: ElevatedButton(
-                        onPressed: _openNotificationSettings,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.black,
-                          foreground: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: const Text('Enable', style: TextStyle(fontSize: 14)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            if (!_runtimePermissionsGranted)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Column(
-                  children: [
-                    const Text(
-                      'SMS and phone access is required',
-                      style: TextStyle(fontSize: 14),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: 200,
-                      child: ElevatedButton(
-                        onPressed: _requestRuntimePermissions,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.black,
-                          foreground: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: const Text('Grant access', style: TextStyle(fontSize: 14)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
+          ),
         ),
-      ),
       ),
     );
   }

