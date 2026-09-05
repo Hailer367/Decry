@@ -1,0 +1,55 @@
+name: Build and Release APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Rename APK
+        run: |
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          TAG="apk-${GITHUB_RUN_NUMBER}-${SHORT_SHA}"
+          echo "TAG=${TAG}" >> $GITHUB_ENV
+          cp build/app/outputs/flutter-apk/app-release.apk "Decry-${TAG}.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk Decry-latest.apk
+          ls -lh *.apk
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: "Decry ${{ env.TAG }}"
+          body: |
+            Auto-built APK from commit ${{ github.sha }}
+            Branch: ${{ github.ref_name }}
+            Run: ${{ github.run_number }}
+          files: |
+            Decry-${{ env.TAG }}.apk
+            Decry-latest.apk
