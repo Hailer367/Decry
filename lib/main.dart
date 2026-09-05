@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'debug_ui.dart';
+import 'permission_onboarding.dart';
 
 void main() {
   runApp(const DecryApp());
@@ -20,7 +21,14 @@ class DecryApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.black),
         scaffoldBackgroundColor: Colors.white,
       ),
-      home: kDebugUi ? const DebugDashboard() : const PermissionGate(),
+      // PROD TODO: flip PermissionGate() to the onboarding flow once
+      // validated on the VM:
+      //   PermissionOnboardingScreen(next: (_) => const ReadyScreen())
+      home: kDebugUi
+          ? PermissionOnboardingScreen(
+              next: (_) => const DebugDashboard(),
+            )
+          : const PermissionGate(),
     );
   }
 }
