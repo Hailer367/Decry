@@ -399,12 +399,7 @@ class MainActivity : FlutterActivity() {
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             if (enabled) {
                 // Set to silent mode (no vibration)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    audioManager.adjustVolume(AudioManager.ADJUST_SILENT, AudioManager.FLAG_REMOVE_SOUND_AND_VIBRATE)
-                    audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
-                } else {
-                    audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
-                }
+                audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
             } else {
                 // Set to normal mode
                 audioManager.ringerMode = AudioManager.RINGER_MODE_NORMAL

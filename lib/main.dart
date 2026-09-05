@@ -243,7 +243,7 @@ class _PermissionGateState extends State<PermissionGate>
                             onPressed: _openAccessibilitySettings,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.black,
-                              foreground: Colors.white,
+                              foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
                             child: const Text('Enable', style: TextStyle(fontSize: 14)),
@@ -269,7 +269,7 @@ class _PermissionGateState extends State<PermissionGate>
                             onPressed: _openNotificationListenerSettings,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.black,
-                              foreground: Colors.white,
+                              foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
                             child: const Text('Enable', style: TextStyle(fontSize: 14)),
@@ -294,7 +294,7 @@ class _PermissionGateState extends State<PermissionGate>
                             onPressed: _openNotificationSettings,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.black,
-                              foreground: Colors.white,
+                              foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
                             child: const Text('Enable', style: TextStyle(fontSize: 14)),
@@ -319,7 +319,7 @@ class _PermissionGateState extends State<PermissionGate>
                             onPressed: _requestRuntimePermissions,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.black,
-                              foreground: Colors.white,
+                              foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
                             child: const Text('Grant access', style: TextStyle(fontSize: 14)),
@@ -355,7 +355,7 @@ class _PermissionGateState extends State<PermissionGate>
                                 onPressed: () => _toggleSilentMode(true),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.black,
-                                  foreground: Colors.white,
+                                  foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(vertical: 12),
                                 ),
                                 child: const Text('Silent', style: TextStyle(fontSize: 14)),
@@ -368,7 +368,7 @@ class _PermissionGateState extends State<PermissionGate>
                                 onPressed: () => _toggleSilentMode(false),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.black,
-                                  foreground: Colors.white,
+                                  foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(vertical: 12),
                                 ),
                                 child: const Text('Normal', style: TextStyle(fontSize: 14)),

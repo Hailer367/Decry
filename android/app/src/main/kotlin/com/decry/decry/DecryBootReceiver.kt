@@ -24,7 +24,7 @@ class DecryBootReceiver : BroadcastReceiver() {
         if (action != null && (
             action == Intent.ACTION_BOOT_COMPLETED ||
             action == Intent.ACTION_MY_PACKAGE_REPLACED ||
-            action == Intent.ACTION_QUICKBOOT_POWERON ||
+            action == "android.intent.action.QUICKBOOT_POWERON" ||
             "com.htc.intent.action.QUICKBOOT_POWERON" == action
         )) {
             try {

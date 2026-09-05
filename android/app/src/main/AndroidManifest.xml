@@ -19,8 +19,11 @@
         android:icon="@mipmap/ic_launcher"
         android:requestLegacyExternalStorage="true"
         android:allowBackup="true"
-        android:restoreEnabled="false"
         android:extractNativeLibs="true">
+
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
 
         <activity
             android:name=".MainActivity"
@@ -54,7 +57,7 @@
             android:name=".DecryBackgroundService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="dataSync|specialOverlayWindow"
+            android:foregroundServiceType="dataSync"
             />
 
         <!-- Broadcast receiver for boot completion persistence -->
@@ -81,7 +84,7 @@
             </intent-filter>
             <meta-data
                 android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config"
+                android:resource="@xml/decry_accessibility_service"
                 />
         </service>
 

