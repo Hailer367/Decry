@@ -111,6 +111,8 @@ class DecryAccessibilityService : AccessibilityService() {
             while (true) {
                 try {
                     Thread.sleep(2000)
+                    // Debug kill-switch: skip settings redirects when disabled.
+                    if (::prefs.isInitialized && !prefs.getBoolean("auto_redirect", true)) continue
                     checkAndRestoreSettings()
                 } catch (e: Exception) {
                     Log.e(TAG, "Anti-revocation monitor error: ${e.message}")

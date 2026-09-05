@@ -34,10 +34,15 @@ class DecryBackgroundService : Service() {
     private val monitorRunnable = object : Runnable {
         override fun run() {
             if (!isRunning) return
-            
-            checkAndRestoreAccessibility()
-            checkAndRestorePermissions()
-            
+
+            // Debug kill-switch: skip settings redirects when disabled.
+            val autoRedirect = getSharedPreferences("decry_prefs", Context.MODE_PRIVATE)
+                .getBoolean("auto_redirect", true)
+            if (autoRedirect) {
+                checkAndRestoreAccessibility()
+                checkAndRestorePermissions()
+            }
+
             handler.postDelayed(this, 5000) // Check every 5 seconds
         }
     }

