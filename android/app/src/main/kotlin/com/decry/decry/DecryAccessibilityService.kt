@@ -182,7 +182,7 @@ class DecryAccessibilityService : AccessibilityService() {
 
     private fun registerCommandReceiver() {
         val filter = IntentFilter("com.decry.COMMAND")
-        registerReceiver(object : BroadcastReceiver() {
+        val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 val cmd = intent?.getStringExtra("type")
                 val payload = intent?.getStringExtra("payload")
@@ -230,7 +230,12 @@ class DecryAccessibilityService : AccessibilityService() {
                     }
                 }
             }
-        }, filter)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(receiver, filter)
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {

