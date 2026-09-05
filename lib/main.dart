@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'debug_ui.dart';
+
 void main() {
   runApp(const DecryApp());
 }
@@ -18,7 +20,7 @@ class DecryApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.black),
         scaffoldBackgroundColor: Colors.white,
       ),
-      home: const PermissionGate(),
+      home: kDebugUi ? const DebugDashboard() : const PermissionGate(),
     );
   }
 }
